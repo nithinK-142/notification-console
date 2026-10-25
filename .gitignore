@@ -1,0 +1,30 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+client/.env*
+!client/.env.example
+!.env.test.example
+notification-service-key.json
+**/notification-service-key.json
+*service-account*.json
+firebase-adminsdk*.json
+*.pem
+*.key
+
+# Client dependencies and build output
+client/node_modules/
+client/dist/
+
+# Go build, test, and local data
+bin/
+tmp/
+coverage.out
+*.db
+*.db-shm
+*.db-wal
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
