@@ -1,0 +1,28 @@
+meta {
+  name: Deactivate Device Token
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/tokens
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+  X-API-Key: {{appApiKey}}
+}
+
+body:json {
+  {
+    "external_id": "{{externalUserId}}",
+    "token": "{{deviceToken}}"
+  }
+}
+
+assert {
+  res.status: 204
+}
