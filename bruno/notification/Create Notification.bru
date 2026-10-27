@@ -1,0 +1,32 @@
+meta {
+  name: Create Notification
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/notifications
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "title": "Test notification",
+    "body": "Notification Console API test"
+  }
+}
+
+assert {
+  res.status: 201
+}
+
+script:post-response {
+  const notification = res.getBody();
+  bru.setVar("notificationId", String(notification.id));
+}
