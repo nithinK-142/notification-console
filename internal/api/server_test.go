@@ -119,7 +119,7 @@ func TestLoginAndCurrentAdmin(t *testing.T) {
 		t.Fatalf("cookie count = %d, want 1", len(cookies))
 	}
 	cookie := cookies[0]
-	if cookie.Name != sessionCookieName || cookie.Value == "" || !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode || cookie.MaxAge <= 0 {
+	if cookie.Name != sessionCookieName || cookie.Value == "" || !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteNoneMode || cookie.MaxAge <= 0 {
 		t.Fatalf("unexpected session cookie: %#v", cookie)
 	}
 
