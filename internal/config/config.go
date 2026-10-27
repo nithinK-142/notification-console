@@ -1,6 +1,10 @@
 package config
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -20,6 +24,16 @@ type Config struct {
 	CookieSecure    bool
 	cookieSecureRaw string
 	APIAddr         string
+}
+
+type serviceAccount struct {
+	Type         string `json:"type"`
+	ProjectID    string `json:"project_id"`
+	PrivateKeyID string `json:"private_key_id"`
+	PrivateKey   string `json:"private_key"`
+	ClientEmail  string `json:"client_email"`
+	ClientID     string `json:"client_id"`
+	TokenURI     string `json:"token_uri"`
 }
 
 var variables = []string{
@@ -127,5 +141,94 @@ func (c Config) ValidateAPI() error {
 			return fmt.Errorf("ALLOWED_ORIGINS contains an invalid origin: %q", origin)
 		}
 	}
+	return nil
+}
+
+func (c Config) ValidateWorker() error {
+	if err := c.ValidateDatabase(); err != nil {
+		return err
+	}
+	return validateFirebaseKey(FirebaseKeyPath())
+}
+
+func FirebaseKeyPath() string {
+	for _, path := range []string{"notification-service-key.json"} {
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+			return path
+		}
+	}
+	return "notification-service-key.json"
+}
+
+func validateFirebaseKey(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("Firebase service-account file not found at %q; save the downloaded key there", path)
+		}
+		return fmt.Errorf("check Firebase service-account file %q: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("Firebase service-account path %q must be a regular file", path)
+	}
+
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read Firebase service-account file %q: %w", path, err)
+	}
+
+	var account serviceAccount
+	if err := json.Unmarshal(contents, &account); err != nil {
+		return fmt.Errorf("Firebase service-account file %q is not valid JSON", path)
+	}
+	if account.Type != "service_account" {
+		return errors.New("Firebase key type must be service_account")
+	}
+
+	fields := map[string]string{
+		"project_id":     account.ProjectID,
+		"private_key_id": account.PrivateKeyID,
+		"private_key":    account.PrivateKey,
+		"client_email":   account.ClientEmail,
+		"client_id":      account.ClientID,
+		"token_uri":      account.TokenURI,
+	}
+	for name, field := range fields {
+		if strings.TrimSpace(field) == "" ||
+			strings.Contains(strings.ToUpper(field), "REPLACE_WITH") {
+			return fmt.Errorf("Firebase service-account field %s is empty or contains a placeholder", name)
+		}
+	}
+
+	if !strings.Contains(account.ClientEmail, "@") {
+		return errors.New("Firebase service-account client_email is invalid")
+	}
+
+	tokenURI, err := url.Parse(account.TokenURI)
+	if err != nil || tokenURI.Scheme != "https" || tokenURI.Host == "" {
+		return errors.New("Firebase service-account token_uri must be a valid HTTPS URL")
+	}
+
+	block, rest := pem.Decode([]byte(account.PrivateKey))
+	if block == nil || len(strings.TrimSpace(string(rest))) != 0 {
+		return errors.New("Firebase service-account private_key is not valid PEM")
+	}
+	if block.Type != "PRIVATE KEY" && block.Type != "RSA PRIVATE KEY" {
+		return errors.New("Firebase service-account private_key must be a PKCS#8 or PKCS#1 RSA private key")
+	}
+
+	var parsedKey any
+	if block.Type == "RSA PRIVATE KEY" {
+		parsedKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+	} else {
+		parsedKey, err = x509.ParsePKCS8PrivateKey(block.Bytes)
+	}
+	if err != nil {
+		return fmt.Errorf("Firebase service-account private_key cannot be parsed: %w", err)
+	}
+	if _, ok := parsedKey.(*rsa.PrivateKey); !ok {
+		return errors.New("Firebase service-account private_key must be an RSA private key")
+	}
+
 	return nil
 }
