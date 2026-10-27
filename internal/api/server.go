@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -117,6 +118,8 @@ func New(db *gorm.DB, cfg config.Config) http.Handler {
 	mux.Handle("GET /api/notifications/{id}", s.requireAdmin(http.HandlerFunc(s.getNotification)))
 	mux.Handle("GET /api/notifications/{id}/batches", s.requireAdmin(http.HandlerFunc(s.listBatches)))
 	mux.Handle("DELETE /api/notifications/{id}", s.requireAdmin(http.HandlerFunc(s.deleteNotification)))
+	mux.Handle("POST /api/tokens", s.requireAPIKey(http.HandlerFunc(s.registerToken)))
+	mux.Handle("DELETE /api/tokens", s.requireAPIKey(http.HandlerFunc(s.deactivateToken)))
 	return s.cors(mux)
 }
 
@@ -179,6 +182,17 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	})
 }
 
+func (s *Server) requireAPIKey(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		provided := r.Header.Get("X-API-Key")
+		if len(s.cfg.AppAPIKey) == 0 || len(provided) != len(s.cfg.AppAPIKey) || subtle.ConstantTimeCompare([]byte(provided), []byte(s.cfg.AppAPIKey)) != 1 {
+			writeError(w, http.StatusUnauthorized, "valid API key required")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -192,7 +206,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 			w.Header().Add("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
 			w.Header().Set("Access-Control-Max-Age", "600")
 		}
 		if r.Method == http.MethodOptions {
