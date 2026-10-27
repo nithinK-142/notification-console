@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -57,6 +58,19 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
 
+func writeDecodeError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errUnsupportedContentType) {
+		writeError(w, http.StatusUnsupportedMediaType, err.Error())
+		return
+	}
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		writeError(w, http.StatusRequestEntityTooLarge, "request body too large")
+		return
+	}
+	writeError(w, http.StatusBadRequest, "invalid JSON request")
+}
+
 const (
 	sessionCookieName = "notification_console_session"
 	sessionLifetime   = 8 * time.Hour
@@ -68,6 +82,11 @@ type sessionClaims struct {
 }
 
 type adminContextKey struct{}
+
+type adminSession struct {
+	ID    int64
+	Email string
+}
 
 type Server struct {
 	db        *gorm.DB
@@ -93,6 +112,11 @@ func New(db *gorm.DB, cfg config.Config) http.Handler {
 	mux.HandleFunc("POST /api/auth/login", s.login)
 	mux.HandleFunc("POST /api/auth/logout", s.logout)
 	mux.Handle("GET /api/auth/me", s.requireAdmin(http.HandlerFunc(s.me)))
+	mux.Handle("GET /api/notifications", s.requireAdmin(http.HandlerFunc(s.listNotifications)))
+	mux.Handle("POST /api/notifications", s.requireAdmin(http.HandlerFunc(s.createNotification)))
+	mux.Handle("GET /api/notifications/{id}", s.requireAdmin(http.HandlerFunc(s.getNotification)))
+	mux.Handle("GET /api/notifications/{id}/batches", s.requireAdmin(http.HandlerFunc(s.listBatches)))
+	mux.Handle("DELETE /api/notifications/{id}", s.requireAdmin(http.HandlerFunc(s.deleteNotification)))
 	return s.cors(mux)
 }
 
@@ -112,12 +136,12 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
-	email, ok := r.Context().Value(adminContextKey{}).(string)
+	session, ok := r.Context().Value(adminContextKey{}).(adminSession)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"email": email})
+	writeJSON(w, http.StatusOK, map[string]string{"email": session.Email})
 }
 
 func (s *Server) requireAdmin(next http.Handler) http.Handler {
@@ -150,7 +174,7 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), adminContextKey{}, admin.Email)
+		ctx := context.WithValue(r.Context(), adminContextKey{}, adminSession{ID: admin.ID, Email: admin.Email})
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -167,7 +191,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 			w.Header().Set("Access-Control-Max-Age", "600")
 		}
@@ -188,7 +212,7 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, value string, expires t
 		MaxAge:   int(time.Until(expires).Seconds()),
 		HttpOnly: true,
 		Secure:   s.cfg.CookieSecure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: s.sessionSameSite(),
 	})
 }
 
@@ -200,6 +224,21 @@ func (s *Server) clearSessionCookie(w http.ResponseWriter) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   s.cfg.CookieSecure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: s.sessionSameSite(),
 	})
+}
+
+func (s *Server) sessionSameSite() http.SameSite {
+	if s.cfg.CookieSecure {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
+}
+
+func parsePositiveID(value string) (int64, error) {
+	id, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || id < 1 {
+		return 0, errors.New("invalid ID")
+	}
+	return id, nil
 }
