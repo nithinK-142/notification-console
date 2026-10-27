@@ -1,6 +1,11 @@
 package config
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/json"
+	"encoding/pem"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -98,6 +103,70 @@ func TestValidateAPIRejectsInvalidCookieSetting(t *testing.T) {
 	cfg.cookieSecureRaw = "sometimes"
 	if err := cfg.ValidateAPI(); err == nil || !strings.Contains(err.Error(), "COOKIE_SECURE") {
 		t.Fatalf("ValidateAPI() error = %v, want COOKIE_SECURE validation error", err)
+	}
+}
+
+func TestValidateFirebaseKeyRejectsPlaceholderFields(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "service-account.json")
+	contents := `{"type":"service_account","project_id":"REPLACE_WITH_PROJECT_ID","private_key":"-----BEGIN PRIVATE KEY-----\\nREPLACE_WITH_PRIVATE_KEY\\n-----END PRIVATE KEY-----","client_email":"REPLACE_WITH_CLIENT_EMAIL"}`
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateFirebaseKey(path); err == nil || !strings.Contains(err.Error(), "placeholder") {
+		t.Fatalf("ValidateFirebaseKey() error = %v, want placeholder rejection", err)
+	}
+}
+
+func TestValidateFirebaseKeyAcceptsValidRSAKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "service-account.json")
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	contents, err := json.Marshal(serviceAccount{
+		Type:         "service_account",
+		ProjectID:    "notification-console-test",
+		PrivateKeyID: "test-key-id",
+		PrivateKey:   string(privateKeyPEM),
+		ClientEmail:  "firebase-admin@example.test",
+		ClientID:     "123456789",
+		TokenURI:     "https://oauth2.googleapis.com/token",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateFirebaseKey(path); err != nil {
+		t.Fatalf("ValidateFirebaseKey() error = %v", err)
+	}
+}
+
+func TestValidateFirebaseKeyRejectsMalformedPrivateKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "service-account.json")
+	contents, err := json.Marshal(serviceAccount{
+		Type:         "service_account",
+		ProjectID:    "notification-console-test",
+		PrivateKeyID: "test-key-id",
+		PrivateKey:   "-----BEGIN PRIVATE KEY-----\\nnot-a-real-key\\n-----END PRIVATE KEY-----",
+		ClientEmail:  "firebase-admin@example.test",
+		ClientID:     "123456789",
+		TokenURI:     "https://oauth2.googleapis.com/token",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateFirebaseKey(path); err == nil || !strings.Contains(err.Error(), "private_key") {
+		t.Fatalf("ValidateFirebaseKey() error = %v, want private key parsing error", err)
 	}
 }
 
