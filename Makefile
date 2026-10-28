@@ -1,6 +1,6 @@
 AIR_VERSION := v1.66.0
 
-.PHONY: help setup db-diff db-up schema-diff server worker dev
+.PHONY: help setup db-diff db-up schema-diff server worker dev admin-create admin-active
 
 help: ## Show commands
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "%-14s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -33,3 +33,12 @@ dev: ## Run API and worker together; Ctrl-C stops both
 	  (air -c .air.worker.toml) & worker=$$!; \
 	  trap 'kill $$api $$worker 2>/dev/null || true; wait' INT TERM EXIT; \
 	  wait
+	  
+admin-create: ## Create an admin (usage: make admin-create EMAIL=admin@example.com)
+	@test -n "$(EMAIL)" || { echo "Usage: make admin-create EMAIL=admin@example.com"; exit 2; }
+	go run ./cmd/admin create --email "$(EMAIL)"
+
+admin-active: ## Set admin status (usage: make admin-active EMAIL=... ACTIVE=true|false)
+	@test -n "$(EMAIL)" || { echo "Usage: make admin-active EMAIL=... ACTIVE=true|false"; exit 2; }
+	@case "$(ACTIVE)" in true|false) ;; *) echo "Pass ACTIVE=true or ACTIVE=false"; exit 2;; esac
+	go run ./cmd/admin set-active --email "$(EMAIL)" --active="$(ACTIVE)"
