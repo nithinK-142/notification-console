@@ -19,7 +19,7 @@ db-diff: ## Generate a SQL migration from GORM models.
 	@atlas migrate diff "$(NAME)" --env gorm --dev-url "$(DATABASE_URL)"
 
 db-up: ## Apply pending PostgreSQL migration
-	go run ./cmd/migrate
+	go run ./cmd/cli migrate up
 
 server: ## Run API with live reload
 	air -c .air.api.toml
@@ -36,9 +36,9 @@ dev: ## Run API and worker together; Ctrl-C stops both
 	  
 admin-create: ## Create an admin (usage: make admin-create EMAIL=admin@example.com)
 	@test -n "$(EMAIL)" || { echo "Usage: make admin-create EMAIL=admin@example.com"; exit 2; }
-	go run ./cmd/admin create --email "$(EMAIL)"
+	go run ./cmd/cli admin create --email "$(EMAIL)"
 
 admin-active: ## Set admin status (usage: make admin-active EMAIL=... ACTIVE=true|false)
 	@test -n "$(EMAIL)" || { echo "Usage: make admin-active EMAIL=... ACTIVE=true|false"; exit 2; }
 	@case "$(ACTIVE)" in true|false) ;; *) echo "Pass ACTIVE=true or ACTIVE=false"; exit 2;; esac
-	go run ./cmd/admin set-active --email "$(EMAIL)" --active="$(ACTIVE)"
+	go run ./cmd/cli admin set-active --email "$(EMAIL)" --active="$(ACTIVE)"

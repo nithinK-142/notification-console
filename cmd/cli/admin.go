@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,50 +9,35 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nithinK-142/notification-console/internal/auth"
-	"github.com/nithinK-142/notification-console/internal/config"
 	"github.com/nithinK-142/notification-console/internal/models"
-	"github.com/nithinK-142/notification-console/internal/store"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/term"
 	"gorm.io/gorm"
 )
 
-func main() {
-	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "admin:", err)
-		os.Exit(1)
-	}
-}
-
-func run(args []string) error {
+func runAdmin(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: admin <create|set-active> [flags]")
+		return errors.New("usage: cli admin <create|set-active> [flags]")
 	}
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-	if err := cfg.ValidateDatabase(); err != nil {
-		return err
-	}
-	db, err := store.OpenPostgres(context.Background(), cfg.DatabaseURL)
-	if err != nil {
-		return err
-	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	defer sqlDB.Close()
 
-	switch args[0] {
+	command := args[0]
+	if command != "create" && command != "set-active" {
+		return fmt.Errorf("unknown admin command %q; use create or set-active", command)
+	}
+
+	db, closeDB, err := openDatabase()
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+
+	switch command {
 	case "create":
 		return createAdmin(db, args[1:])
 	case "set-active":
 		return setAdminActive(db, args[1:])
 	default:
-		return fmt.Errorf("unknown command %q; use create or set-active", args[0])
+		return fmt.Errorf("unknown admin command %q", command)
 	}
 }
 
@@ -99,7 +83,7 @@ func createAdmin(db *gorm.DB, args []string) error {
 		return fmt.Errorf("check existing admin: %w", err)
 	}
 
-	hash, err := auth.HashPassword(password)
+	hash, err := HashPassword(password)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
@@ -207,9 +191,4 @@ func HashPassword(password string) (string, error) {
 		return "", err
 	}
 	return string(hash), nil
-}
-
-// VerifyPassword checks a password against a stored bcrypt hash.
-func VerifyPassword(password, hash string) error {
-	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 }
