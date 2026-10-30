@@ -66,6 +66,12 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sortDirection, err := parseNotificationSort(r.URL.Query().Get("sort"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	base := s.db.WithContext(r.Context()).Model(&models.Notification{}).
 		Joins("JOIN notification_jobs ON notification_jobs.notification_id = notifications.id")
 	base, err = filterNotifications(base, r)
@@ -80,8 +86,9 @@ func (s *Server) listNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 
 	items := make([]notificationListItem, 0, limit)
+	order := "notifications.created_at " + sortDirection + ", notifications.id " + sortDirection
 	err = base.Select("notifications.id, notifications.title, notifications.created_at, notification_jobs.status, notification_jobs.sent, notification_jobs.total, notification_jobs.failed").
-		Order("notifications.created_at DESC, notifications.id DESC").Limit(limit).Offset(offset).Scan(&items).Error
+		Order(order).Limit(limit).Offset(offset).Scan(&items).Error
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not list notifications")
 		return
@@ -295,4 +302,15 @@ func queryInt(r *http.Request, key string, fallback, minimum, maximum int) (int,
 		return 0, errors.New("invalid integer query parameter")
 	}
 	return value, nil
+}
+
+func parseNotificationSort(value string) (string, error) {
+	sortDirection := strings.ToUpper(strings.TrimSpace(value))
+	if sortDirection == "" {
+		return "DESC", nil
+	}
+	if sortDirection != "ASC" && sortDirection != "DESC" {
+		return "", errors.New("sort must be asc or desc")
+	}
+	return sortDirection, nil
 }

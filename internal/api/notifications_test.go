@@ -32,6 +32,32 @@ func TestValidateNotificationInput(t *testing.T) {
 	}
 }
 
+func TestParseNotificationSort(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  string
+		valid bool
+	}{
+		{name: "default", value: "", want: "DESC", valid: true},
+		{name: "descending", value: "desc", want: "DESC", valid: true},
+		{name: "ascending", value: "asc", want: "ASC", valid: true},
+		{name: "case and whitespace", value: " ASC ", want: "ASC", valid: true},
+		{name: "invalid", value: "random", valid: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := parseNotificationSort(test.value)
+			if test.valid && (err != nil || got != test.want) {
+				t.Fatalf("parseNotificationSort() = (%q, %v), want (%q, nil)", got, err, test.want)
+			}
+			if !test.valid && err == nil {
+				t.Fatal("parseNotificationSort() error = nil, want validation error")
+			}
+		})
+	}
+}
+
 func TestQueryInt(t *testing.T) {
 	tests := []struct {
 		name  string
