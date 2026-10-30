@@ -44,6 +44,10 @@ export default function App() {
     updateUrl({ page });
   }, [updateUrl]);
 
+  const changeSort = useCallback((sort: ConsoleUrlState['sort']) => {
+    updateUrl({ sort, page: 1 });
+  }, [updateUrl]);
+
   const selectNotification = useCallback((id: number) => {
     updateUrl({ notificationId: id });
   }, [updateUrl]);
@@ -68,9 +72,11 @@ export default function App() {
             query={urlState.query}
             status={urlState.status}
             page={urlState.page}
+            sort={urlState.sort}
             onQueryChange={changeQuery}
             onStatusChange={changeStatus}
             onPageChange={changePage}
+            onSortChange={changeSort}
             onNewNotification={() => setCreateOpen(true)}
             onSelectNotification={selectNotification}
           />

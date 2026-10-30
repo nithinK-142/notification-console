@@ -1,10 +1,10 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
-import type { NotificationStatus } from './types';
+import type { NotificationSort, NotificationStatus } from './types';
 
 export const queryKeys = {
   notifications: ['notifications'] as const,
-  list: (params: { limit: number; offset: number; q?: string; status?: NotificationStatus }) =>
+  list: (params: { limit: number; offset: number; q?: string; status?: NotificationStatus; sort?: NotificationSort }) =>
     ['notifications', 'list', params] as const,
   details: (id: number) => ['notifications', 'details', id] as const,
   batches: (id: number) => ['notifications', 'batches', id] as const,
@@ -12,7 +12,7 @@ export const queryKeys = {
   recent: ['dashboard', 'recent'] as const,
 };
 
-export function useNotifications(params: { limit: number; offset: number; q?: string; status?: NotificationStatus }) {
+export function useNotifications(params: { limit: number; offset: number; q?: string; status?: NotificationStatus; sort?: NotificationSort }) {
   return useQuery({
     queryKey: queryKeys.list(params),
     queryFn: () => api.notifications(params),

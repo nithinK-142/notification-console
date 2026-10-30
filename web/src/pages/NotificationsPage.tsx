@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react';
-import { IconAlertCircle, IconPlus, IconSearch, IconTrash, IconX } from '@tabler/icons-react';
+import { IconAlertCircle, IconPlus, IconSearch, IconSortAscending, IconSortDescending, IconTrash, IconX } from '@tabler/icons-react';
 import { ActionIcon, Alert, Box, Button, Group, Modal, Pagination, Paper, Skeleton, Stack, Text, TextInput, Title, UnstyledButton } from '@mantine/core';
 import { notifications as toastNotifications } from '@mantine/notifications';
 import { NotificationTable } from '../components/NotificationTable';
 import { useDeleteNotification, useNotificationStats, useNotifications } from '../queries';
-import type { NotificationStatus, NotificationSummary } from '../types';
+import type { NotificationSort, NotificationStatus, NotificationSummary } from '../types';
 import type { ConsoleStatus } from '../url-state';
 
 interface NotificationsPageProps {
   query: string;
   status: ConsoleStatus;
   page: number;
+  sort: NotificationSort;
   onQueryChange: (query: string) => void;
   onStatusChange: (status: ConsoleStatus) => void;
   onPageChange: (page: number) => void;
+  onSortChange: (sort: NotificationSort) => void;
   onNewNotification: () => void;
   onSelectNotification: (id: number) => void;
 }
@@ -27,7 +29,7 @@ const filters = [
 ];
 
 export function NotificationsPage({
-  query, status: filter, page, onQueryChange, onStatusChange, onPageChange,
+  query, status: filter, page, sort, onQueryChange, onStatusChange, onPageChange, onSortChange,
   onNewNotification, onSelectNotification,
 }: NotificationsPageProps) {
   const [search, setSearch] = useState(query);
@@ -42,6 +44,7 @@ export function NotificationsPage({
     offset: (page - 1) * limit,
     q: query || undefined,
     status,
+    sort,
   });
   const stats = useNotificationStats();
   const totalPages = Math.max(1, Math.ceil((notifications.data?.total ?? 0) / limit));
@@ -109,6 +112,17 @@ export function NotificationsPage({
               size="sm"
             />
             <Button variant="default" leftSection={<IconSearch size={14} />} size="sm" onClick={applySearch}>Search</Button>
+            <Button
+              variant="default"
+              leftSection={sort === 'desc' ? <IconSortDescending size={15} /> : <IconSortAscending size={15} />}
+              size="sm"
+              aria-pressed={sort === 'asc'}
+              aria-label={`Sort order ${sort.toUpperCase()}; switch to ${sort === 'desc' ? 'ascending' : 'descending'}`}
+              title={sort === 'desc' ? 'Newest first · click for oldest first' : 'Oldest first · click for newest first'}
+              onClick={() => onSortChange(sort === 'desc' ? 'asc' : 'desc')}
+            >
+              {sort.toUpperCase()}
+            </Button>
           </Group>
 
           <Box className="notification-filter-track" role="group" aria-label="Filter notifications by status">

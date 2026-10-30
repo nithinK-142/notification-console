@@ -1,4 +1,5 @@
 export type NotificationStatus = 'pending' | 'processing' | 'done' | 'failed';
+export type NotificationSort = 'asc' | 'desc';
 
 export interface AdminSession {
   email: string;

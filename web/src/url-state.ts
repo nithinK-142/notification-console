@@ -1,4 +1,4 @@
-import type { NotificationStatus } from './types';
+import type { NotificationSort, NotificationStatus } from './types';
 
 export type ConsoleView = 'overview' | 'notifications';
 export type ConsoleStatus = 'all' | NotificationStatus;
@@ -7,6 +7,7 @@ export interface ConsoleUrlState {
   view: ConsoleView;
   query: string;
   status: ConsoleStatus;
+  sort: NotificationSort;
   page: number;
   notificationId: number | null;
 }
@@ -25,6 +26,7 @@ export function readConsoleUrlState(): ConsoleUrlState {
     status: validStatuses.includes(rawStatus as NotificationStatus)
       ? rawStatus as NotificationStatus
       : 'all',
+    sort: params.get('sort') === 'asc' ? 'asc' : 'desc',
     page: Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1,
     notificationId: Number.isSafeInteger(rawNotificationId) && rawNotificationId > 0
       ? rawNotificationId
@@ -53,6 +55,9 @@ export function writeConsoleUrlState(
 
   if (next.status !== 'all') url.searchParams.set('status', next.status);
   else url.searchParams.delete('status');
+
+  if (next.sort === 'asc') url.searchParams.set('sort', 'asc');
+  else url.searchParams.delete('sort');
 
   if (next.page > 1) url.searchParams.set('page', String(next.page));
   else url.searchParams.delete('page');

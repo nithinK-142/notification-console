@@ -5,6 +5,7 @@ import type {
   NotificationList,
   NotificationStats,
   NotificationStatus,
+  NotificationSort,
 } from './types';
 
 const baseURL = import.meta.env.VITE_API_URL?.trim().replace(/\/+$/, '');
@@ -60,10 +61,11 @@ export const api = {
 
   me: () => request<AdminSession>('/api/auth/me'),
 
-  notifications: (params: { limit: number; offset: number; q?: string; status?: NotificationStatus }) => {
+  notifications: (params: { limit: number; offset: number; q?: string; status?: NotificationStatus; sort?: NotificationSort }) => {
     const search = new URLSearchParams({ limit: String(params.limit), offset: String(params.offset) });
     if (params.q) search.set('q', params.q);
     if (params.status) search.set('status', params.status);
+    if (params.sort) search.set('sort', params.sort);
     return request<NotificationList>(`/api/notifications?${search.toString()}`);
   },
 
